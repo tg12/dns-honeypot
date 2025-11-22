@@ -1,0 +1,144 @@
+services:
+  unbound:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: unbound
+    privileged: true
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_NICE
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./unbound:/opt/unbound/etc/unbound
+      - ./unbound/var/lib/unbound:/var/lib/unbound
+      - ./unbound/var/log/unbound:/var/log/unbound
+    environment:
+      - TZ=UTC
+      - ROOT_HINTS_URL=https://www.internic.net/domain/named.root
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  unbound_exporter:
+    build:
+      context: ./unbound-exporter
+    container_name: unbound-exporter
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      - unbound
+    environment:
+      - UNBOUND_CONTROL_CONFIG=/opt/unbound/etc/unbound/unbound.conf
+      - UNBOUND_CONTROL_HOST=127.0.0.1
+      - UNBOUND_CONTROL_PORT=8953
+      - EXPORTER_PORT=9167
+    volumes:
+      - ./unbound:/opt/unbound/etc/unbound:ro
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: unbound-prometheus
+    restart: unless-stopped
+    depends_on:
+      - unbound_exporter
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=15d"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/data:/prometheus
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - monitoring
+
+  loki:
+    image: grafana/loki:2.9.17
+    container_name: unbound-loki
+    restart: unless-stopped
+    command:
+      - "-config.file=/etc/loki/config.yml"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/config.yml:ro
+      - ./loki/data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - monitoring
+
+  promtail:
+    image: grafana/promtail:2.9.17
+    container_name: unbound-promtail
+    restart: unless-stopped
+    command:
+      - "-config.file=/etc/promtail/config.yml"
+    volumes:
+      - ./promtail/config.yml:/etc/promtail/config.yml:ro
+      - ./unbound/var/log/unbound:/var/log/unbound:ro
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: unbound-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - loki
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
+      - GF_SERVER_ROOT_URL=https://${GRAFANA_DOMAIN}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/etc/grafana/dashboards
+      - ./grafana-data:/var/lib/grafana
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`${GRAFANA_DOMAIN}`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=le"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+      - "traefik.http.routers.grafana-http.rule=Host(`${GRAFANA_DOMAIN}`)"
+      - "traefik.http.routers.grafana-http.entrypoints=web"
+      - "traefik.http.routers.grafana-http.middlewares=grafana-https"
+      - "traefik.http.middlewares.grafana-https.redirectscheme.scheme=https"
+    networks:
+      - monitoring
+
+  traefik:
+    image: traefik:latest
+    container_name: unbound-traefik
+    restart: unless-stopped
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.le.acme.email=${LETSENCRYPT_EMAIL}"
+      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web"
+      - "--log.level=INFO"
+      - "--api.dashboard=true"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/letsencrypt:/letsencrypt
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge
