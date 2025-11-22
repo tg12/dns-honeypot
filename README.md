@@ -6,6 +6,8 @@ As an engineer who spends most of my days knee-deep in observability tooling, I 
 
 I intentionally introduced zero signal on my end,no packet drops, no tailored replies, no mitigation. Just Unbound with logging enabled, Loki tailing the log file, Prometheus scraping exporter metrics, Traefik fronting Grafana, and Docker Compose wiring them together. The resolver sat on 94.130.27.226, a refreshingly “clean” IPv4 I had found (check its status at https://www.abuseipdb.com/check/94.130.27.226 if you want a pre-noise baseline), and I let the world do its thing. A single laptop could watch every panel, fire up `tools/dns_query_storm.sh` when I wanted to stir the pot, and then let the noise settle back into whatever patterns the global internet chose to send.
 
+You can peek at those dashboards live at https://dns.cybersafeintl.co.uk/public-dashboards/eb554b5b74e14f4d95e376c0033ee83d, although they sit on the lowest-end server in the stack, so expect slow refreshes during heavy queries.
+
 ## What the dashboards capture
 
 - **Throughput**: Prometheus scrapes the Unbound exporter’s `unbound_total_num_queries` metric, so the “Throughput (QPS, 5m rate)” panel shows queries per second and breaks it down by source. That view answers the “who is hammering the resolver?” question,sudden spikes point directly to Bangladesh- or Poland-based ASNs, and the logs make it easy to see if SERVFAIL/NXDOMAIN storms accompany the bursts.
