@@ -73,3 +73,13 @@ If you’re following along with your own honeypot, update this README with stat
 ## Legal
 
 This project is provided “as is.” There are no warranties of any kind, express or implied, including but not limited to merchantability, fitness for a particular purpose, or non-infringement, and I am not liable for any damages arising from its use. You assume all risks associated with deploying, configuring, or operating this stack.
+
+## Support
+
+If you find this project useful, consider supporting it:
+
+| Currency | Address |
+|----------|---------|
+| **Bitcoin (BTC)** | `3QjWqhQbHdHgWeYHTpmorP8Pe1wgDjJy54` |
+| **Ethereum (ETH)** | `0x5851e6145F4773d1585b8686095FB16E368a4dA1` |
+| **ZCash (ZEC)** | `t1KSR5YkNPbjqRSCoLKo5AddFWdm9Kzxh1B` |
